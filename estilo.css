@@ -1,0 +1,28 @@
+window {
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
+label {
+    color: #ffffff;
+}
+
+separator {
+    background-color: #3d3d3d;
+}
+
+scale trough {
+    background-color: #3d3d3d;
+    border-radius: 4px;
+    min-height: 8px;
+}
+
+scale trough highlight {
+    background-color: #4caf50;
+    border-radius: 4px;
+}
+
+scale slider {
+    background-color: #4caf50;
+    border-radius: 8px;
+}
