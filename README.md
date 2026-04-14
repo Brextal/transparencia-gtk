@@ -35,6 +35,8 @@ python3 ventana.py
 ```
 Ajusta la transparencia de tus ventanas directamente desde la interfaz.
 
+![Interfaz gráfica](2026-04-14-164048.png)
+
 ## Contribuciones
 Las contribuciones son bienvenidas.
 
