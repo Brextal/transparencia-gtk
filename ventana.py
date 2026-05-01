@@ -3,11 +3,13 @@ import subprocess
 import json
 import os
 import sys
+import re
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, Gdk, GLib
 
-LOG_LEVEL = "INFO"  
+LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
+
 
 def log(level, message):
     if level == "DEBUG" and LOG_LEVEL != "DEBUG":
@@ -17,11 +19,21 @@ def log(level, message):
     print(f"[{level}] {message}", file=sys.stderr)
 
 APPS = [
-    ("kitty", "Kitty", "utilities-terminal"),
-    ("brave-browser", "Brave", "internet-web-browser"),
-    ("org.kde.dolphin", "Dolphin", "system-file-manager"),
-    ("code", "VSCode", "accessories-text-editor"),
+    ("kitty", "Kitty", "utilities-terminal", "class", "kitty"),
+    ("brave-browser", "Brave", "internet-web-browser", "class", "brave-browser"),
+    ("whatsapp", "WhatsApp", "whatsapp", "class", "brave-web.whatsapp.com__-Default"),
+    ("x-twitter", "X", "twitter", "title", ".*X.*"),
+    ("youtube", "YouTube", "youtube", "title", ".*YouTube.*"),
+    ("org.kde.dolphin", "Dolphin", "system-file-manager", "class", "org.kde.dolphin"),
+    ("code", "VSCode", "accessories-text-editor", "class", "code"),
 ]
+
+APP_INFO = {app_id: (match_type, match_value) for app_id, _, _, match_type, match_value in APPS}
+
+
+def get_app_match(app_id):
+    return APP_INFO.get(app_id, ("class", app_id))
+
 
 CONFIG_DIR = os.path.expanduser("~/.config/ventana_gtk")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "transparencias.json")
@@ -47,7 +59,7 @@ def cargar_config():
             log("WARNING", f"Error al cargar config: {e}")
             pass
     log("DEBUG", "Usando config por defecto")
-    return {app_class: None for app_class, _, _ in APPS}
+    return {app_id: None for app_id, _, _, _, _ in APPS}
 
 
 def guardar_config(data):
@@ -78,18 +90,21 @@ HYPRLAND_AVAILABLE = is_hyprland_available()
 import threading
 
 
-def aplicar_windowrule(app_class, alpha):
+def aplicar_windowrule(app_id, alpha):
     def _run():
         if not HYPRLAND_AVAILABLE:
             return
         try:
-            subprocess.run(['hyprctl', 'keyword', f'windowrule match:class {app_class},opacity', format_alpha_value(alpha)], capture_output=True, timeout=5)
+            match_type, match_value = get_app_match(app_id)
+            opacity_value = format_alpha_value(alpha)
+            rule = f"opacity {opacity_value}, match:{match_type} {match_value}"
+            subprocess.run(['hyprctl', 'keyword', 'windowrule', rule], capture_output=True, timeout=5)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
     threading.Thread(target=_run, daemon=True).start()
 
 
-def aplicar_setprop_inmediato(app_class, alpha):
+def aplicar_setprop_inmediato(app_id, alpha):
     def _run():
         if not HYPRLAND_AVAILABLE:
             return
@@ -100,12 +115,20 @@ def aplicar_setprop_inmediato(app_class, alpha):
             except json.JSONDecodeError:
                 return
             
+            match_type, match_value = get_app_match(app_id)
             alpha_val = format_alpha_value(alpha)
+            
             for client in clients:
-                if client.get('class') == app_class:
-                    addr = client.get('address')
-                    if addr:
-                        subprocess.run(['hyprctl', 'dispatch', f'setprop address:{addr}', 'opacity', alpha_val], capture_output=True, timeout=5)
+                if match_type == "title":
+                    if re.search(match_value, client.get('title', '')):
+                        addr = client.get('address')
+                        if addr:
+                            subprocess.run(['hyprctl', 'dispatch', f'setprop address:{addr}', 'opacity', alpha_val], capture_output=True, timeout=5)
+                else:
+                    if client.get('class') == match_value:
+                        addr = client.get('address')
+                        if addr:
+                            subprocess.run(['hyprctl', 'dispatch', f'setprop address:{addr}', 'opacity', alpha_val], capture_output=True, timeout=5)
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
     threading.Thread(target=_run, daemon=True).start()
@@ -155,8 +178,8 @@ class Ventana(Gtk.Window):
             )
 
     def _crear_controles_transparencia(self):
-        for i, (app_class, app_name, icon_name) in enumerate(APPS):
-            fila = self._crear_fila_app(app_class, app_name, icon_name)
+        for i, (app_id, app_name, icon_name, _, _) in enumerate(APPS):
+            fila = self._crear_fila_app(app_id, app_name, icon_name)
             self.box.pack_start(fila, False, False, 0)
             
             if i < len(APPS) - 1:
@@ -165,7 +188,7 @@ class Ventana(Gtk.Window):
                 separator.set_margin_bottom(8)
                 self.box.pack_start(separator, False, False, 0)
 
-    def _crear_fila_app(self, app_class, app_name, icon_name):
+    def _crear_fila_app(self, app_id, app_name, icon_name):
         container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         container.set_margin_top(8)
         container.set_margin_bottom(8)
@@ -204,32 +227,32 @@ class Ventana(Gtk.Window):
         slider_box.pack_start(slider, True, True, 0)
         slider_box.pack_start(percentage_label, False, False, 0)
 
-        saved_alpha = self.config.get(app_class)
+        saved_alpha = self.config.get(app_id)
         if saved_alpha is not None:
             switch.set_active(True)
             slider.set_sensitive(True)
             slider.set_value(saved_alpha)
             percentage_label.set_text(f"{int(saved_alpha * 100)}%")
         
-        self.controles[app_class] = {
+        self.controles[app_id] = {
             "switch": switch,
             "slider": slider,
             "percentage_label": percentage_label,
-            "app_class": app_class,
+            "app_id": app_id,
             "enabled": saved_alpha is not None
         }
 
-        switch.connect("notify::active", self._on_toggle, app_class)
-        slider.connect("value-changed", self._on_slider_update, app_class)
-        slider.connect("button-release-event", self._on_slider_release, app_class)
+        switch.connect("notify::active", self._on_toggle, app_id)
+        slider.connect("value-changed", self._on_slider_update, app_id)
+        slider.connect("button-release-event", self._on_slider_release, app_id)
 
         container.pack_start(header, False, False, 0)
         container.pack_start(slider_box, False, False, 0)
 
         return container
 
-    def _on_toggle(self, switch, gparam, app_class):
-        controles = self.controles[app_class]
+    def _on_toggle(self, switch, gparam, app_id):
+        controles = self.controles[app_id]
         is_active = switch.get_active()
         
         controles["enabled"] = is_active
@@ -237,38 +260,38 @@ class Ventana(Gtk.Window):
         
         if is_active:
             alpha = controles["slider"].get_value()
-            if self.config.get(app_class) is None:
-                self.config[app_class] = alpha
+            if self.config.get(app_id) is None:
+                self.config[app_id] = alpha
                 guardar_config(self.config)
-            self._aplicar_transparencia(app_class, alpha)
+            self._aplicar_transparencia(app_id, alpha)
         else:
             controles["percentage_label"].set_text("0%")
-            self.config[app_class] = None
+            self.config[app_id] = None
             guardar_config(self.config)
-            aplicar_windowrule(app_class, None)
-            aplicar_setprop_inmediato(app_class, None)
+            aplicar_windowrule(app_id, None)
+            aplicar_setprop_inmediato(app_id, None)
 
-    def _on_slider_update(self, slider, app_class):
-        controles = self.controles[app_class]
+    def _on_slider_update(self, slider, app_id):
+        controles = self.controles[app_id]
         if not controles["enabled"]:
             return
         alpha = controles["slider"].get_value()
         controles["percentage_label"].set_text(f"{int(alpha * 100)}%")
 
-    def _on_slider_release(self, widget, event, app_class):
-        controles = self.controles[app_class]
+    def _on_slider_release(self, widget, event, app_id):
+        controles = self.controles[app_id]
         if not controles["enabled"]:
             return
         alpha = controles["slider"].get_value()
-        self._aplicar_transparencia(app_class, alpha)
+        self._aplicar_transparencia(app_id, alpha)
 
-    def _aplicar_transparencia(self, app_class, alpha):
-        controles = self.controles[app_class]
+    def _aplicar_transparencia(self, app_id, alpha):
+        controles = self.controles[app_id]
         controles["percentage_label"].set_text(f"{int(alpha * 100)}%")
-        self.config[app_class] = alpha
+        self.config[app_id] = alpha
         guardar_config(self.config)
-        aplicar_windowrule(app_class, alpha)
-        aplicar_setprop_inmediato(app_class, alpha)
+        aplicar_windowrule(app_id, alpha)
+        aplicar_setprop_inmediato(app_id, alpha)
 
     def _on_key_press(self, widget, event):
         if event.keyval == Gdk.KEY_Escape:
@@ -291,4 +314,3 @@ win.connect("destroy", lambda w: guardar_config(win.config))
 win.connect("destroy", Gtk.main_quit)
 win.show_all()
 Gtk.main()
-

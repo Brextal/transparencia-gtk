@@ -1,6 +1,7 @@
+# Python
+venv/
 __pycache__/
 *.pyc
-venv/
-.env
-*.pyo
-*.egg-info/
+
+# Config files
+transparencias.json
