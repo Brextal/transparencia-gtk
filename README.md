@@ -32,18 +32,60 @@ Aplicación para **controlar la transparencia de ventanas en Hyprland** mediante
 
 ## 🚀 Instalación y uso
 
-Clona el repositorio:
+### Opción 1: Ejecución directa (rápida)
 
+Clona el repositorio y ejecuta la app:
 ```bash
 git clone https://github.com/Brextal/transparencia-gtk.git
 cd transparencia-gtk
-```
-
-Ejecuta la aplicación:
-
-```bash
 python3 ventana.py
 ```
+
+### Opción 2: Instalación completa (para lanzadores como rofi)
+
+Sigue estos pasos para que la app aparezca en tu lanzador (rofi, dmenu, etc.) y sea accesible desde terminal:
+
+1. Clona el repositorio:
+   ```bash
+   git clone https://github.com/Brextal/transparencia-gtk.git
+   cd transparencia-gtk
+   ```
+
+2. (Opcional) Verifica permisos de ejecución:
+   ```bash
+   chmod +x transparencia
+   ```
+
+3. Crea un enlace simbólico en `~/.local/bin`:
+   ```bash
+   ln -sf "$(pwd)/transparencia" ~/.local/bin/transparencia
+   ```
+   > 💡 Asegúrate de que `~/.local/bin` esté en tu `PATH`:
+   > ```bash
+   > echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   > ```
+
+4. Crea el archivo `.desktop` para lanzadores:
+   ```bash
+   cat > ~/.local/share/applications/transparencia.desktop << 'EOF'
+   [Desktop Entry]
+   Name=Transparencia GTK
+   Comment=Control de transparencia de ventanas en Hyprland
+   Exec=transparencia
+   Icon=transparencia
+   Terminal=false
+   Type=Application
+   Categories=Utility;
+   StartupNotify=true
+   StartupWMClass=ventanaGTK
+   Keywords=transparency;alpha;hyprland;window;
+   EOF
+   ```
+
+5. Actualiza la caché de aplicaciones:
+   ```bash
+   update-desktop-database ~/.local/share/applications 2>/dev/null || true
+   ```
 
 Ajusta la transparencia de tus ventanas directamente desde la interfaz:
 1. Activa el interruptor (switch) para la aplicación deseada.
@@ -51,6 +93,15 @@ Ajusta la transparencia de tus ventanas directamente desde la interfaz:
 3. La configuración se guarda automáticamente y se aplica al instante.
 
 ![Interfaz gráfica](2026-04-14-164048.png)
+
+### 🔄 Actualizar
+
+Para obtener los últimos cambios:
+```bash
+cd transparencia-gtk
+git pull
+```
+Los cambios se reflejarán automáticamente (el symlink apunta al script del repo).
 
 ## 🎯 Aplicaciones soportadas
 
