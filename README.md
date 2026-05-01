@@ -94,13 +94,6 @@ Ajusta la transparencia de tus ventanas directamente desde la interfaz:
 
 ![Interfaz gráfica](2026-04-14-164048.png)
 
-### 🔄 Actualizar
-
-Para obtener los últimos cambios:
-```bash
-cd transparencia-gtk
-git pull
-```
 Los cambios se reflejarán automáticamente (el symlink apunta al script del repo).
 
 ## 🎯 Aplicaciones soportadas
